@@ -1,0 +1,38 @@
+-- Question 1
+WITH t1 AS (SELECT p.category,p.product_name,ROUND(SUM(o.sales)::numeric,2) AS product_total_sales, ROUND(SUM(o.profit)::numeric,2) AS product_total_profit,
+	RANK() OVER(PARTITION BY p.category ORDER BY SUM(o.sales) DESC) AS product_rank
+FROM public.products AS p
+LEFT JOIN public.orders AS o
+ON p.product_id=o.product_id
+GROUP BY p.category,p.product_name
+ORDER BY p.category)
+SELECT category,product_name,product_total_sales,product_total_profit,product_rank
+FROM t1
+WHERE product_rank <=5;
+-- Question 2
+WITH missing AS (
+    SELECT *
+    FROM orders AS o
+    WHERE quantity IS NULL
+),
+unit_price AS (
+    SELECT 
+        product_id,
+        -- Calculate unit price as sales / quantity for non-missing quantities
+        SUM(sales) * 1.0 / NULLIF(SUM(quantity), 0) AS unit_price
+    FROM orders
+    WHERE quantity IS NOT NULL
+    GROUP BY product_id
+)
+SELECT 
+    m.product_id, 
+    m.discount,
+    m.market,
+    m.region,
+    m.sales,
+    m.quantity,
+    -- Impute quantity as sales / unit_price, adjusted for discount
+    ROUND(((m.sales / u.unit_price) * (1 - m.discount))::numeric,0) AS calculated_quantity
+FROM missing AS m
+LEFT JOIN unit_price AS u ON u.product_id = m.product_id
+WHERE u.unit_price IS NOT NULL
